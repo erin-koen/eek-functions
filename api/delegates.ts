@@ -68,13 +68,12 @@ const query = gql`
 export default async (request: VercelRequest, response: VercelResponse) => {
   const data = await graphQLClient.request<responseFormat>(query);
 
-  const formattedData: {
+  const delegateData: {
     name: string;
     address: string;
     votes: number;
     votesInLastTenProps: number;
   }[] = data.governanceBySlug.delegates.map(item => {
-    console.log({ participation: item.stats.recentParticipationRate });
     const delegate = {
       name: item.account.name,
       address: item.account.address,
@@ -82,10 +81,26 @@ export default async (request: VercelRequest, response: VercelResponse) => {
       votesInLastTenProps: item.stats.recentParticipationRate.recentVoteCount,
     };
 
-    if (delegate.votes > 100000) {
-      return delegate;
-    }
+    return delegate;
   });
 
-  response.send(formattedData);
+  const delegatesWithNoVotes = delegateData.reduce((prev, curr) => {
+    return curr.votesInLastTenProps > 0 ? prev + 1 : prev;
+  }, 0);
+
+  const totalVotes = delegateData.reduce((prev, curr) => {
+    return prev + curr.votes;
+  }, 0);
+
+  const averageParticipation =
+    delegateData.reduce((prev, curr) => {
+      return prev + curr.votesInLastTenProps;
+    }, 0) / delegateData.length;
+
+  response.send({
+    delegateData,
+    totalVotes,
+    averageParticipation,
+    delegatesWithNoVotes,
+  });
 };
